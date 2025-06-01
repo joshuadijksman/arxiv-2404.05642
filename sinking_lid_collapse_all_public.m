@@ -44,6 +44,13 @@ optexparr = NaN(numfiles,1); %another definition of "optimal" exponent
 typearr = []; % save type: cyl or sphere. Not very relevant here as all cases were sphere. Type is used for sth else.
 lidonarr = []; % extract whether lid is on or not
 
+% extract prefactors for all nonlin fits (new for these data)
+fitexpyarr = bexpy:expyr:eexpy;
+slopearr_nonlin = NaN(numfiles,length(fitexpyarr));
+offsetarr_nonlin = NaN(numfiles,length(fitexpyarr));
+exparr_nonlin = NaN(numfiles,length(fitexpyarr));
+conf_nonlin = NaN(numfiles,2,2);
+
 for i=1:numfiles
     
     if ~mod(i,2), fprintf('numfile # %d\n', i); end
@@ -98,8 +105,8 @@ for i=1:numfiles
     % fit poly1, offset should be zero hence added point at origin
     [fitobj,gof2] = fit(xtmp',deltatmp','poly1');
     
-    figure
-    plot(fitobj,xtmp',deltatmp')
+    %figure
+    %plot(fitobj,xtmp',deltatmp')
     
     tmp = coeffvalues(fitobj);    
     slopearr_lin(i) = tmp(1);
@@ -122,7 +129,12 @@ for i=1:numfiles
        resi = fitobj(xtmp)-deltatmp';
        stdarr(i,ctr) = nanstd(resi);
        kurtarr(i,ctr) = kurtosis(resi);
-       skewarr(i,ctr) = skewness(resi);  
+       skewarr(i,ctr) = skewness(resi);
+
+       coiffure = coeffvalues(fitobj);
+       exparr_nonlin(i,ctr) = expy; 
+       slopearr_nonlin(i,ctr) = coiffure(1);
+       offsetarr_nonlin(i,ctr) = coiffure(3);
     end
     [~,indexy] = max(expyarr(i,:));
     bestexparr(i) = bexpy+(indexy-1)*expyr;
@@ -278,6 +290,10 @@ for i=1:lengylid
     sigmaerrarrfix(i,1) = gof2.rmse;
     sigmaerrarrfix(i,2) = gof2.rsquare;
 end
+
+%% save the data to a mat file for later re-use
+
+save('SM_data.mat','-mat')
 
 %% Figure 1 compression data 
 
@@ -843,5 +859,80 @@ hold off
 % save
 print('figfincoll', '-depsc','-r600')
 print('figfincoll', '-dpdf', '-bestfit')
+
+%% Verify nonlinearity with lid 
+% (a) Time series for cases with lid plus (b) collapse 
+% indexchoice 13 is equivalent to an exponent of 0.5
+
+indexchoice = 13;
+
+lidchoice = 1;
+alphy = 1/fitexpyarr(indexchoice);
+
+masklid = 1:numfiles;
+
+figure(10)
+subplot(2,2,[1 2])
+cmap = colormap(parula(length(unique(spherestressarr(masklid)))));
+
+for i=1:1:length(masklid)
+    
+    indexer = find(unique(spherestressarr(masklid))==spherestressarr(masklid(i)));
+    
+
+    scatter(timearr(masklid(i),:)*60,displarr(masklid(i),:), 'k','MarkerEdgeColor',cmap(indexer,:))
+    hold on
+    plot(timearr(masklid(i),:)*60,displarr(masklid(i),:), 'k','Color',cmap(indexer,:))
+
+   
+end
+
+box on
+xlabel('t [sec]')
+ylabel('\delta [cm]')
+xlim([0 2500])
+ylim([0, 10])
+ax=gca;
+ax.FontSize = 14;
+hold off
+c = colorbar('EastOutside');
+c.Label.String = '\sigma_S [Pa]';
+
+clim([0,250]);
+text(3550,90,'(a)','FontSize',18)
+
+
+subplot 223
+
+for i=1:1:length(masklid) 
+    
+    indexer = find(unique(spherestressarr(masklid))==spherestressarr(masklid(i)));
+  
+
+    scatter(timearr(masklid(i),:)*60,(displarr(masklid(i),:)./slopearr_nonlin(masklid(i),indexchoice)).^alphy, 'k','MarkerEdgeColor',cmap(indexer,:))
+    hold on
+   
+              
+end
+
+plot([10,10000],0.012*[10,10000],'-.k')
+
+box on
+xlabel('t [sec]')
+ylabel(horzcat('(\delta\eta_{eff})^{',num2str(alphy,3),'} [A.U]'))
+ax=gca;
+ax.FontSize = 14;
+hold off
+
+clim([0,250])
+xlim([20 3000])
+ylim([1E-2, 2E2])
+set(gca,'Yscale','log')
+set(gca,'Xscale','log')
+
+%save
+print('checknl', '-dpdf', '-bestfit')
+
+
 
 
